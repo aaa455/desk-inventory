@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     app_env: str = "development"
     yolo_model_path: str = "models/yolo11n.pt"
     yolo_device: str = "auto"
+    sam_model_path: str = "models/sam2.1_t.pt"
+    inventory_excluded_labels: list[str] = ["person", "dining table", "chair", "couch", "bed"]
     max_upload_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
     max_image_pixels: int = Field(default=20_000_000, gt=0)
     max_image_side: int = Field(default=1600, ge=64, le=4096)

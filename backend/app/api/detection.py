@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from starlette.concurrency import run_in_threadpool
 
-from app.core.config import settings
+from app.api.uploads import read_upload
 from app.schemas.detection import DetectionResponse
 from app.services.detector import ModelUnavailable, detector
 from app.services.images import InvalidImage
@@ -21,14 +21,7 @@ async def detect(
     confidence: Annotated[float, Query(ge=0.01, le=1, description="最低检测置信度")] = 0.25,
     iou: Annotated[float, Query(ge=0.01, le=1, description="重叠框去重阈值")] = 0.45,
 ) -> DetectionResponse:
-    data = bytearray()
-    try:
-        while chunk := await file.read(64 * 1024):
-            data.extend(chunk)
-            if len(data) > settings.max_upload_bytes:
-                raise HTTPException(413, "图片文件超过允许的大小。")
-    finally:
-        await file.close()
+    data = await read_upload(file)
     try:
         return await run_in_threadpool(detector.analyze, bytes(data), confidence, iou)
     except InvalidImage as exc:

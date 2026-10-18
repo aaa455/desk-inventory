@@ -1,5 +1,3 @@
-import os
-import threading
 from collections import Counter
 from pathlib import Path
 from time import perf_counter
@@ -7,6 +5,7 @@ from time import perf_counter
 from app.core.config import PROJECT_ROOT, settings
 from app.schemas.detection import Detection, DetectionResponse, ImageInfo
 from app.services.images import annotate_image, prepare_image
+from app.services.runtime import configure_runtime, inference_lock
 
 # COCO 类别顺序与官方预训练 YOLO 模型一致。
 LABELS_ZH = (
@@ -39,7 +38,7 @@ class ModelUnavailable(RuntimeError):
 
 class Detector:
     def __init__(self) -> None:
-        self._lock = threading.Lock()
+        self._lock = inference_lock
         self._model = None
         self._device = None
 
@@ -51,21 +50,10 @@ class Detector:
             path = PROJECT_ROOT / path
         if not path.is_file():
             raise ModelUnavailable("未找到检测模型，请先按照运行说明准备本地权重。")
-        os.environ.setdefault("YOLO_CONFIG_DIR", str(PROJECT_ROOT / ".cache" / "ultralytics"))
-        os.environ.setdefault("TORCH_HOME", str(PROJECT_ROOT / ".cache" / "torch"))
-        os.environ.setdefault("MPLCONFIGDIR", str(PROJECT_ROOT / ".cache" / "matplotlib"))
         try:
-            Path(os.environ["YOLO_CONFIG_DIR"]).mkdir(parents=True, exist_ok=True)
+            configure_runtime()
             import torch
             from ultralytics import YOLO
-            from ultralytics import settings as yolo_settings
-
-            yolo_settings.update({
-                "sync": False,
-                "datasets_dir": str(PROJECT_ROOT / ".cache" / "datasets"),
-                "weights_dir": str(PROJECT_ROOT / "models"),
-                "runs_dir": str(PROJECT_ROOT / "outputs"),
-            })
             device = ("0" if torch.cuda.is_available() else "cpu") if settings.yolo_device == "auto" else settings.yolo_device
             model = YOLO(str(path), task="detect")
             if model.task != "detect":
@@ -77,20 +65,25 @@ class Detector:
         except Exception as exc:
             raise ModelUnavailable("无法加载模型，请检查权重、依赖和设备配置。") from exc
 
-    def analyze(self, data: bytes, confidence: float, iou: float) -> DetectionResponse:
-        started = perf_counter()
-        image = prepare_image(data)
-        height, width = image.bgr.shape[:2]
+    def predict(self, image, confidence: float, iou: float, max_det: int = 300):
+        """在处理尺寸上检测，返回独立于 GPU 张量的结果。"""
         with self._lock:
             self._load()
             inference_started = perf_counter()
             result = self._model.predict(image.bgr, conf=confidence, iou=iou,
-                                         device=self._device, imgsz=640, verbose=False)[0]
+                                         device=self._device, imgsz=640, max_det=max_det, verbose=False)[0]
             inference_ms = (perf_counter() - inference_started) * 1000
             boxes = result.boxes.xyxy.cpu().tolist()
             scores = result.boxes.conf.cpu().tolist()
             classes = result.boxes.cls.cpu().tolist()
             names = result.names
+        return boxes, scores, classes, names, inference_ms
+
+    def analyze(self, data: bytes, confidence: float, iou: float) -> DetectionResponse:
+        started = perf_counter()
+        image = prepare_image(data)
+        height, width = image.bgr.shape[:2]
+        boxes, scores, classes, names, inference_ms = self.predict(image, confidence, iou)
         detections = []
         for box, score, class_id in zip(boxes, scores, classes):
             class_id = int(class_id)
