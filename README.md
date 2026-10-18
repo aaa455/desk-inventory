@@ -4,7 +4,7 @@
 
 ## 当前进度
 
-已完成第三步：图片校验、YOLO11n 检测、SAM 2.1 框提示实例分割、分类清单、二值掩膜和叠加图，以及手动点／框提示分割。已经在本机 GPU 上跑通真实推理；多模态对照与对比界面尚未实现。
+已完成第四步：传统 YOLO + SAM 分割清单、手动点／框提示，以及视觉大模型独立清点、结构化校验、超时错误处理和 JSON 导出。两条流程均已跑通真实推理；同图并排界面与样本评估将在第五步实现。
 
 ## 项目方案
 
@@ -40,7 +40,7 @@ py -3.12 -m venv .venv
 # 下面的 GPU 组合已在本机验证；其他机器请依据硬件选择官方兼容构建。
 .\.venv\Scripts\python.exe -m pip install --cache-dir .cache/pip torch==2.7.1 torchvision==0.22.1 --index-url https://download.pytorch.org/whl/cu128
 .\.venv\Scripts\python.exe -m pip install --cache-dir .cache/pip -r requirements.txt
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
 只需选择一种创建环境的方式。项目运行环境、后续权重及输出文件都放在项目目录内。创建环境后可再用 `.\.venv\Scripts\python.exe scripts/check_environment.py` 检查隔离环境。
@@ -67,7 +67,7 @@ Copy-Item .env.example .env
 - 健康检查：<http://127.0.0.1:8000/api/health>
 - 交互接口文档：<http://127.0.0.1:8000/docs>
 
-`.env` 使用 UTF-8 编码，环境变量优先于配置文件。密钥只保存在本地，不进入 Git；当前传统视觉流程无需模型密钥。模板中的大模型服务地址仅为示例，第四步接入时再配置。
+`.env` 使用 UTF-8 编码，环境变量优先于配置文件。密钥只保存在本地 .env，不进入 Git；不要将密钥填入会提交的 .env.example。传统视觉流程无需模型密钥，远程视觉模型按下面说明配置。已有 .env 时不要用模板覆盖它；修改配置后需要重启后端。
 
 ## 检测图片
 
@@ -127,6 +127,38 @@ Copy-Item .env.example .env
 
 工具将结果写入独立的 `outputs/prompt-随机编号/`。手动分割不命名物体，不计入自动物品清单。点可能指向物体的局部，需核对结果后调整框或前景／背景点。
 
+
+## 视觉大模型独立清点
+
+在本地 .env 填写 VISION_API_BASE_URL、VISION_API_KEY 和 VISION_MODEL。基础地址应包含服务要求的版本路径，例如 https://api.hangzhale.com/v1，后端会追加 /chat/completions；不要填写完整的补全接口路径。模型必须支持图像和 Chat Completions 协议。本机按用户配置使用 gpt-6.1-sol 已验证，使用其他服务时按其文档填写实际模型名。
+
+图片会通过 HTTPS 发送到配置的视觉服务，可能产生费用。启动后端后，使用 POST /api/vision 上传同一张图片，或运行：
+
+~~~powershell
+.\.venv\Scripts\python.exe scripts/analyze_vision.py '你的桌面照片.jpg'
+# 同时将人和家具计入清单。
+.\.venv\Scripts\python.exe scripts/analyze_vision.py '你的桌面照片.jpg' --include-background
+~~~
+
+本流程只接收统一预处理后的图片与固定中文提示，不接收 YOLO / SAM 结果。它与传统方案返回同一原始文件 SHA256；发送的 PNG 另有摘要。清单返回 inventory、counts、total、excluded_items 和 uncertainties，总数由后端计算。默认复用同一份背景类别配置；不推断真实桌面范围。大模型可能识别出传统模型未支持的类别，也可能漏认或误认，结果需要人工核对。
+
+工具每次保存至独立的 outputs/vision-随机编号/vision.json，包含文字提示及其版本、输入摘要、模型标识、输出模式与令牌上限、清单、耗时和服务提供的令牌用量。该接口不生成掩膜或检测图。模型返回的类别名仅做格式归一化，同义词差异留待人工检查，不自动模糊合并。
+
+默认配置如下：
+
+~~~dotenv
+VISION_TIMEOUT_SECONDS=120
+VISION_MAX_OUTPUT_TOKENS=4096
+VISION_RESPONSE_MODE=json_object
+VISION_TOKEN_LIMIT_FIELD=max_completion_tokens
+~~~
+
+json_object 只约束有效 JSON，后端仍严格校验字段、正整数数量和重复类别。服务明确支持严格结构时可使用 json_schema；仅支持文字响应时可显式改为 text。部分兼容服务只接受 max_tokens，请调整 VISION_TOKEN_LIMIT_FIELD。配置不匹配时返回错误，不会自动换模型、降级或重试。
+
+缺少配置返回 503，超时返回 504，上游限流或额度不足返回 429，其他上游错误和无效清单返回 502，模型明确拒绝分析返回 422。失败不会伪装成空清单。默认 120 秒是整个远程调用时限，命令行默认等待 150 秒；提高服务时限时，相应设置工具 --timeout。后端不保存上传图片或原始上游响应，不向前端透传密钥和错误正文。
+
+完整的协议、JSON 约束和 token、embedding、attention 等学习说明见 [视觉模型接入与学习记录](docs/视觉模型接入.md)；样例结果与局限见 [第四步验证记录](docs/第四步验证.md)。
+
 ## 验证
 
 ```powershell
@@ -145,6 +177,14 @@ Copy-Item .env.example .env
 
 该脚本只临时启动本地服务，不联网下载图片；需要已准备的检测和分割权重，会将本地图像与派生验证图保存在 `outputs/step3-verification`。不指定 `--cpu` 时只验证当前配置设备；指定时额外运行一次 CPU 框分割。它验证数据链路和结果一致性，不代表准确率或跨设备像素一致。
 
+第四步的 38 项回归测试全部通过。一次真实调用的端到端验证：
+
+~~~powershell
+.\.venv\Scripts\python.exe scripts/verify_vision.py '允许发送给模型服务的本地图片.png'
+~~~
+
+该脚本临时启动本地后端，通过命令行工具发起一次真实分析并检查图片摘要、明细、总数和导出，结束后关闭服务。它使用 .env 中的模型配置，会发送图片并可能产生费用，不自动重试。生成结果保存在独立的 outputs/step4-verification-* 目录，不进入 Git。模拟回归测试不联网，不代表真实模型准确率。
+
 ## 目录结构
 
 ```text
@@ -162,6 +202,8 @@ scripts/
   prepare_model.py      检查并按需下载模型权重
   detect_image.py       上传图片并保存检测结果
   verify_segmentation.py 真实分割链路验证
+  analyze_vision.py     上传图片并保存视觉大模型清单
+  verify_vision.py      一次真实视觉模型链路验证
 tests/                  图片处理与接口回归测试
 .env.example            配置模板
 requirements.txt        当前阶段依赖范围

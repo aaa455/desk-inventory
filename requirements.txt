@@ -6,3 +6,5 @@ ultralytics==8.3.228
 python-multipart==0.0.20
 opencv-python==5.0.0.93
 pillow==12.3.0
+# 复用已安装的 HTTP 客户端，用于远程视觉接口与接口测试。
+httpx==0.28.1
