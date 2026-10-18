@@ -1,18 +1,42 @@
 # 桌面物品清点
 
-上传一张桌面照片，分别通过本地视觉模型与视觉大模型生成物品清单，并排比较识别类别、计数、耗时和使用体验。
+在 PowerShell 输入一张桌面照片的路径，分别通过本地视觉模型与视觉大模型生成清单，在终端比较类别、计数与耗时，并导出结果供人工核对。
 
 ## 当前进度
 
-已完成第四步：传统 YOLO + SAM 分割清单、手动点／框提示，以及视觉大模型独立清点、结构化校验、超时错误处理和 JSON 导出。两条流程均已跑通真实推理；同图并排界面与样本评估将在第五步实现。
+已完成第五步：PowerShell 同图双方案对比、各分支独立错误处理、清单与掩膜导出、人工清点模板及离线计数评估。无需网页或启动后端服务；仍保留 HTTP 接口用于集成。56 项回归测试与真实 PowerShell 运行已通过，最终验收材料将在第六步整理。
+
+
+## 直接在 PowerShell 使用
+
+完成下面的环境和权重准备，并在本地 .env 配置视觉服务后，直接运行：
+
+~~~powershell
+Set-Location 'D:\desk inventory'
+.\scripts\清点桌面.ps1 -图片 'D:\照片\桌面.jpg'
+~~~
+
+无需打开网页或启动 Uvicorn。两条流程并发分析同一份图片，结果保存到独立的 outputs/comparison-* 目录。使用视觉服务会发送照片，可能产生费用。也可以不带参数运行 .\scripts\清点桌面.ps1，按提示输入照片路径。
+
+输出包含终端分类对照、comparison.json、counts.csv、分割图、实例掩膜，以及初始数量全部为空的 人工清点模板.json。失败一侧显示“未完成”，不按零计数；成功一侧结果仍保留。
+
+查看原图并填写模板后，只计算误差：
+
+~~~powershell
+.\scripts\清点桌面.ps1 -结果 '结果目录\comparison.json' -人工清单 '结果目录\人工清点模板.json' -确认人工清点
+~~~
+
+离线核对不会调用模型或产生 API 费用。支持添加两边都漏掉的类别，计算类别绝对误差、总数误差、少计和多计；这些指标不是检测或分割准确率。
+
+更多参数、中文模板格式、执行策略受限时的 Python 入口和适用场景见 [PowerShell 使用说明](docs/PowerShell使用说明.md)。真实结果和测试范围见 [第五步验证](docs/第五步验证.md)。
 
 ## 项目方案
 
 - 后端采用 FastAPI，统一管理图片输入、分析任务和结构化结果。
 - 传统视觉方案使用 YOLO11n 检测，随后将检测框交给 SAM 2.1 tiny 分割。两者复用现有 Ultralytics、PyTorch 与 GPU 环境，不重新训练模型。
 - 多模态方案通过兼容 OpenAI 接口的视觉模型，独立分析同一张图片，不使用传统模型结果作为提示。
-- 界面并排展示原图、检测或分割结果、两份物品清单和分类计数。
-- 使用人工清点的小型样本集核对两种方案，展示正确结果与失败案例。
+- 按用户选择，PowerShell 终端并列展示两份分类计数与差值，分割图和实例掩膜保存为文件。
+- 支持人工清点模板核对与计数误差评估；当前仅完成公开咖啡桌样本的开发验证，不宣称整体准确率。
 
 YOLO 预训练模型只支持其训练类别，不能预先保证识别笔、橡皮等所有桌面物品。SAM 负责按提示分割，本身不会补全漏检类别。会记录支持类别，并根据实际样本决定是否增加开放词汇检测。
 
@@ -56,9 +80,9 @@ if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
 脚本先检查项目 `models/yolo11n.pt` 和 `models/sam2.1_t.pt`，有效则复用；缺失时下载 Ultralytics 官方发布的权重并校验 SHA256。分别约 5.6 MB 和 78.1 MB，不进入 Git。Ultralytics 库和使用方式涉及 AGPL-3.0 或企业许可规则，参考 [官方许可说明](https://www.ultralytics.com/license)；SAM 2 原始模型的 [Apache-2.0 许可](https://github.com/facebookresearch/sam2/blob/main/LICENSE) 与 Ultralytics 集成代码许可分别适用。这是使用预训练模型，无需训练数据或自行训练。
 
-## 启动后端
+## 可选：启动 HTTP 后端
 
-在项目根目录运行：
+PowerShell 清点入口不需要此步骤。若需要调用原有 HTTP 接口，在项目根目录运行：
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
@@ -204,6 +228,8 @@ scripts/
   verify_segmentation.py 真实分割链路验证
   analyze_vision.py     上传图片并保存视觉大模型清单
   verify_vision.py      一次真实视觉模型链路验证
+  compare_image.py      无服务的同图对比与离线核对
+  清点桌面.ps1          PowerShell 中文入口
 tests/                  图片处理与接口回归测试
 .env.example            配置模板
 requirements.txt        当前阶段依赖范围
