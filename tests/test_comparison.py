@@ -224,11 +224,23 @@ class EvaluationTests(unittest.TestCase):
 
 
 class ReportingTests(unittest.TestCase):
+    def assert_csv_file_has_no_blank_rows(self, path):
+        # 检查落盘文件，覆盖 Windows 文本模式重复转换回车的情况。
+        raw = path.read_bytes()
+        self.assertTrue(raw.startswith(b"\xef\xbb\xbf"))
+        self.assertNotIn(b"\r\r\n", raw)
+        with path.open(encoding="utf-8-sig", newline="") as stream:
+            rows = list(csv.reader(stream))
+        self.assertEqual(len(rows), 5)
+        self.assertTrue(all(rows))
+        self.assertEqual([row[0] for row in rows[3:]], ["cup", "saucer"])
+
     def test_exports_use_blank_truth_not_model_counts(self):
         result = run_mock()
         with tempfile.TemporaryDirectory() as temp:
             output = Path(temp) / "report"
             export_comparison(result, output)
+            self.assert_csv_file_has_no_blank_rows(output / "counts.csv")
             loaded = ComparisonResponse.model_validate_json((output / "comparison.json").read_text(encoding="utf-8"))
             self.assertEqual(loaded.image_sha256, result.image_sha256)
             template = json.loads((output / "人工清点模板.json").read_text(encoding="utf-8"))
@@ -272,6 +284,7 @@ class ReportingTests(unittest.TestCase):
                     self.assertEqual(compare_image.main(), 0)
             files = list(parent.glob("evaluation-*/evaluation.json"))
             self.assertEqual(len(files), 1)
+            self.assert_csv_file_has_no_blank_rows(files[0].parent / "counts.csv")
             metrics = json.loads(files[0].read_text(encoding="utf-8"))["评估"]
             self.assertEqual(metrics["traditional"]["missing_count"], 1)
             self.assertEqual(metrics["vision"]["category_absolute_error"], 0)

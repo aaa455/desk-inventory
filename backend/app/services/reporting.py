@@ -156,7 +156,7 @@ def write_json(path: Path, payload):
 def export_comparison(comparison: ComparisonResponse, output: Path):
     output.mkdir(parents=True, exist_ok=False)
     write_json(output / "comparison.json", comparison.model_dump())
-    (output / "counts.csv").write_text(count_csv(comparison), encoding="utf-8-sig")
+    (output / "counts.csv").write_text(count_csv(comparison), encoding="utf-8-sig", newline="")
     template = {
         "图片摘要": comparison.image_sha256,
         "说明": "看原图填写真实数量（0 到 500 的整数），不要保留 null。补充两方案都漏掉的类别；同义词先统一口径。空图可保留空类别数组。",

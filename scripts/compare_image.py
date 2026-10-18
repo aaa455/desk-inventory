@@ -74,7 +74,7 @@ def main():
                 "图片摘要": comparison.image_sha256, "评估": evaluation.model_dump(),
                 "人工类别说明": [entry.model_dump(by_alias=True) for entry in document.items],
             })
-            (output / "counts.csv").write_text(count_csv(comparison, evaluation), encoding="utf-8-sig")
+            (output / "counts.csv").write_text(count_csv(comparison, evaluation), encoding="utf-8-sig", newline="")
             print_comparison(comparison, evaluation)
             print("\n离线评估已保存：" + str(output))
             print("本次没有调用模型或发送图片。")
