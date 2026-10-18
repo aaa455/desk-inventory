@@ -11,3 +11,4 @@ uploads/
 .cache/
 .tmp/
 *.egg-info/
+Ultralytics/

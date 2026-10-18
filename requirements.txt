@@ -1,4 +1,8 @@
-# 当前阶段只安装后端依赖；模型与图像依赖在对应阶段安装。
+# 先按运行说明从 PyTorch 官方索引安装兼容的计算依赖。
 fastapi>=0.115,<1.0
 uvicorn>=0.34,<1.0
 pydantic-settings>=2.7,<3.0
+ultralytics==8.3.228
+python-multipart==0.0.20
+opencv-python==5.0.0.93
+pillow==12.3.0
