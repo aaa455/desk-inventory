@@ -574,6 +574,71 @@
       font-weight: 700;
     }
 
+    .review { margin-top: 26px; }
+
+    .review-body { padding: 16px; }
+
+    .review-help {
+      margin: 0 0 14px;
+      color: var(--ink-2);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .truth-count {
+      width: 110px;
+      min-height: 36px;
+      padding: 6px 8px;
+      border: 1px solid var(--rule-strong);
+      border-radius: 3px;
+      font: inherit;
+      text-align: right;
+    }
+
+    .add-category {
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) minmax(120px, .8fr) auto;
+      gap: 9px;
+      margin-top: 14px;
+    }
+
+    .add-category input {
+      min-width: 0;
+      min-height: 38px;
+      padding: 7px 10px;
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      font: inherit;
+    }
+
+    .add-category button, .export-actions button {
+      height: 38px;
+      padding: 0 13px;
+    }
+
+    .review-confirm {
+      display: flex;
+      gap: 9px;
+      align-items: flex-start;
+      margin: 16px 0 12px;
+      color: var(--ink-2);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .review-confirm input { margin-top: 3px; }
+
+    .review-status { min-height: 20px; margin: 10px 0 0; color: var(--ink-2); font-size: 13px; }
+    .review-status.error { color: var(--bad-ink); }
+
+    .evaluation { margin-top: 18px; }
+
+    .evaluation table th, .evaluation table td { text-align: left; }
+
+    .export-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 0 0 18px; }
+
+    .export-actions button { color: var(--accent-ink); background: var(--panel); }
+
     /* 可视化结果 */
 
     .visual {
@@ -658,6 +723,8 @@
       table.diff th:nth-child(n + 2) { white-space: normal; }
       table.diff td.cat { padding-right: 8px; }
       .cat-en { font-size: 11px; }
+      .add-category { grid-template-columns: minmax(0, 1fr); }
+      .truth-count { width: 82px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -729,6 +796,31 @@
           <div class="branch-body" id="vision"></div>
         </article>
       </section>
+
+      <div class="export-actions" aria-label="下载分析结果">
+        <button id="download-json" type="button">下载 JSON</button>
+        <button id="download-csv" type="button">下载 CSV</button>
+      </div>
+
+      <section class="panel review" id="review-panel" aria-label="人工核对与误差评估">
+        <div class="panel-head">
+          <h2>人工核对与误差评估</h2>
+          <span class="hint">对照原图填写真实数量</span>
+        </div>
+        <div class="review-body">
+          <p class="review-help">先看原图，为每个类别填写真实数量；如果两种方案都漏掉了物品，请补充类别。数量填 0 表示原图中没有该类物品。核对完整后勾选确认，再计算计数误差。</p>
+          <div class="scroller" id="truth-table"></div>
+          <form class="add-category" id="add-category-form">
+            <input id="new-label-en" type="text" maxlength="80" placeholder="英文类别，如 pen" aria-label="英文类别">
+            <input id="new-label-zh" type="text" maxlength="80" placeholder="中文类别，如 笔" aria-label="中文类别">
+            <button type="submit">补充类别</button>
+          </form>
+          <label class="review-confirm"><input id="truth-confirm" type="checkbox"><span>我已核对原图，并补上两种方案可能共同漏掉的类别。</span></label>
+          <button id="evaluate-button" type="button">计算计数误差</button>
+          <p id="review-status" class="review-status" role="status" aria-live="polite"></p>
+          <div id="evaluation" class="evaluation hidden" aria-live="polite"></div>
+        </div>
+      </section>
     </div>
   </main>
 
@@ -739,6 +831,9 @@
     const statusLine = document.querySelector('#status');
     const fileHint = document.querySelector('#file-hint');
     const result = document.querySelector('#result');
+    let currentComparison = null;
+    let currentEvaluation = null;
+    let truthNames = {};
 
     const DEFAULT_STATUS = '支持 JPEG、PNG 和 WebP 图片。';
 
@@ -924,6 +1019,242 @@
       summary.append(text, elapsed);
     }
 
+    function inventoriesFor(comparison, branchName) {
+      const branch = comparison[branchName];
+      return branch.status === 'success' ? branch.result.inventory : null;
+    }
+
+    function renderTruthTable(preserveValues = true) {
+      const target = document.querySelector('#truth-table');
+      const previousValues = preserveValues
+        ? new Map([...target.querySelectorAll('.truth-count')].map(input => [input.dataset.label, input.value]))
+        : new Map();
+      target.replaceChildren();
+      const table = element('table');
+      const head = element('thead');
+      const row = element('tr');
+      row.append(columnHead('类别'), columnHead('图片中的真实数量', 'num'));
+      head.append(row);
+      const body = element('tbody');
+      for (const label of Object.keys(truthNames).sort()) {
+        const itemRow = element('tr');
+        const name = element('td', undefined, 'cat');
+        name.append(document.createTextNode(truthNames[label]));
+        name.append(element('span', label, 'cat-en'));
+        const value = element('td', undefined, 'num');
+        const input = element('input');
+        input.type = 'number';
+        input.min = '0';
+        input.max = '500';
+        input.step = '1';
+        input.required = true;
+        input.inputMode = 'numeric';
+        input.className = 'truth-count';
+        input.dataset.label = label;
+        input.setAttribute('aria-label', truthNames[label] + '的真实数量');
+        if (previousValues.has(label)) input.value = previousValues.get(label);
+        value.append(input);
+        itemRow.append(name, value);
+        body.append(itemRow);
+      }
+      table.append(head, body);
+      target.append(table);
+      if (!Object.keys(truthNames).length) {
+        target.append(element('p', '两种方案都没有检出类别。请从下方补充图片中实际存在的类别，再填写数量。', 'empty'));
+      }
+    }
+
+    function prepareReview(comparison) {
+      truthNames = {};
+      for (const name of ['traditional', 'vision']) {
+        for (const item of inventoriesFor(comparison, name) || []) {
+          truthNames[item.label_en] = item.label;
+        }
+      }
+      currentEvaluation = null;
+      document.querySelector('#evaluation').replaceChildren();
+      document.querySelector('#evaluation').classList.add('hidden');
+      document.querySelector('#truth-confirm').checked = false;
+      renderTruthTable(false);
+      document.querySelector('#review-status').textContent =
+        comparison.traditional.status === 'error' && comparison.vision.status === 'error'
+          ? '两种方案均未完成，没有可评估的预测结果。'
+          : '人工核对只使用本次已保存的结果，不会再次调用模型。';
+    }
+
+    function addTruthCategory(event) {
+      event.preventDefault();
+      const english = document.querySelector('#new-label-en');
+      const chinese = document.querySelector('#new-label-zh');
+      const label = english.value.trim().toLowerCase().replace(/\s+/g, ' ');
+      const name = chinese.value.trim();
+      const status = document.querySelector('#review-status');
+      status.className = 'review-status';
+      if (!/^[a-z][a-z0-9 '/-]{0,79}$/.test(label) || !name) {
+        status.className = 'review-status error';
+        status.textContent = '请填写中文类别，以及符合英文格式的类别名（以小写字母开头）。';
+        return;
+      }
+      if (Object.hasOwn(truthNames, label)) {
+        status.className = 'review-status error';
+        status.textContent = '这个英文类别已经在核对表中。';
+        return;
+      }
+      truthNames[label] = name;
+      currentEvaluation = null;
+      document.querySelector('#evaluation').classList.add('hidden');
+      document.querySelector('#truth-confirm').checked = false;
+      renderTruthTable();
+      english.value = '';
+      chinese.value = '';
+      status.textContent = '类别已加入，请填写它在原图中的真实数量。';
+    }
+
+    function renderEvaluation(data) {
+      const target = document.querySelector('#evaluation');
+      target.replaceChildren();
+      const table = element('table');
+      const head = element('thead');
+      const header = element('tr');
+      header.append(columnHead('计数误差指标'), columnHead('本地方案'), columnHead('视觉大模型'));
+      head.append(header);
+      const body = element('tbody');
+      const metrics = [
+        ['预测总数', 'predicted_total'],
+        ['人工总数', 'truth_total'],
+        ['类别绝对误差合计', 'category_absolute_error'],
+        ['类别平均绝对误差', 'category_mean_absolute_error'],
+        ['少计数量', 'missing_count'],
+        ['多计数量', 'extra_count'],
+        ['总数绝对误差', 'total_absolute_error'],
+      ];
+      for (const [label, key] of metrics) {
+        const row = element('tr');
+        row.append(element('th', label));
+        for (const name of ['traditional', 'vision']) {
+          row.append(element('td', data[name] ? String(data[name][key] ?? '无类别') : '未评估'));
+        }
+        body.append(row);
+      }
+      table.append(head, body);
+      target.append(table);
+      for (const note of data.notes) target.append(element('p', note, 'empty'));
+      target.classList.remove('hidden');
+    }
+
+    async function evaluateCounts() {
+      const status = document.querySelector('#review-status');
+      status.className = 'review-status';
+      const confirmed = document.querySelector('#truth-confirm').checked;
+      if (!confirmed) {
+        status.className = 'review-status error';
+        status.textContent = '请先核对原图并确认类别完整。';
+        return;
+      }
+      const truth = [];
+      for (const input of document.querySelectorAll('.truth-count')) {
+        const count = input.value === '' ? NaN : Number(input.value);
+        if (!Number.isInteger(count) || count < 0 || count > 500) {
+          status.className = 'review-status error';
+          status.textContent = '每个类别都需要填写 0 到 500 的整数数量。';
+          input.focus();
+          return;
+        }
+        truth.push({ label_en: input.dataset.label, count });
+      }
+      const inventoryForRequest = name => {
+        const items = inventoriesFor(currentComparison, name);
+        return items === null ? null : items.map(item => ({ label_en: item.label_en, count: item.count }));
+      };
+      const payload = {
+        traditional: inventoryForRequest('traditional'),
+        vision: inventoryForRequest('vision'),
+        truth,
+        confirmed: true,
+      };
+      const button = document.querySelector('#evaluate-button');
+      button.disabled = true;
+      status.textContent = '正在计算误差。';
+      try {
+        const response = await fetch('/api/compare/evaluate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          const detail = Array.isArray(data.detail)
+            ? data.detail.map(item => item.msg).join('；')
+            : data.detail;
+          throw new Error(detail || '误差计算失败，请检查填写内容。');
+        }
+        currentEvaluation = data;
+        renderEvaluation(data);
+        status.textContent = '计算完成。结果仅评价当前图片的类别计数。';
+      } catch (error) {
+        status.className = 'review-status error';
+        status.textContent = error.message || '无法连接评估接口。';
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    function downloadFile(filename, content, type) {
+      const url = URL.createObjectURL(new Blob([content], { type }));
+      const link = element('a');
+      link.href = url;
+      link.download = filename;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function currentTruthEntries() {
+      return [...document.querySelectorAll('.truth-count')].map(input => ({
+        label_en: input.dataset.label,
+        count: input.value === '' ? null : Number(input.value),
+      }));
+    }
+
+    function downloadJson() {
+      const result = {
+        comparison: currentComparison,
+        manual_truth: currentTruthEntries(),
+        truth_confirmed: document.querySelector('#truth-confirm').checked,
+        evaluation: currentEvaluation,
+      };
+      downloadFile('desk-inventory-result.json', JSON.stringify(result, null, 2), 'application/json;charset=utf-8');
+    }
+
+    function csvCell(value) {
+      let text = String(value ?? '');
+      if (/^[\s\t\r\n]*[=+@-]/.test(text)) text = "'" + text;
+      return '"' + text.replace(/"/g, '""') + '"';
+    }
+
+    function downloadCsv() {
+      const local = inventoriesFor(currentComparison, 'traditional');
+      const remote = inventoriesFor(currentComparison, 'vision');
+      const left = new Map((local || []).map(item => [item.label_en, item.count]));
+      const right = new Map((remote || []).map(item => [item.label_en, item.count]));
+      const rows = [
+        ['图片摘要', currentComparison.image_sha256],
+        ['方案状态', '本地：' + currentComparison.traditional.status, '大模型：' + currentComparison.vision.status],
+        ['英文类别', '中文类别', '本地数量', '大模型数量', '大模型减本地', '人工清点'],
+      ];
+      const truth = new Map(currentTruthEntries()
+        .filter(item => item.count !== null)
+        .map(item => [item.label_en, item.count]));
+      for (const label of Object.keys(truthNames).sort()) {
+        const l = local === null ? '' : left.get(label) || 0;
+        const r = remote === null ? '' : right.get(label) || 0;
+        rows.push([label, truthNames[label], l, r, currentComparison.comparable ? r - l : '', truth.has(label) ? truth.get(label) : '']);
+      }
+      const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
+      downloadFile('desk-inventory-counts.csv', csv, 'text/csv;charset=utf-8');
+    }
+
     fileInput.addEventListener('change', () => {
       const file = fileInput.files[0];
       if (!file) { fileHint.textContent = ''; return; }
@@ -940,6 +1271,8 @@
       button.disabled = true;
       button.textContent = '分析中…';
       result.classList.add('hidden');
+      currentComparison = null;
+      currentEvaluation = null;
       statusLine.className = 'status';
       statusLine.textContent = '正在分析图片，请稍候。';
       const formData = new FormData();
@@ -948,12 +1281,14 @@
         const response = await fetch('/api/compare', { method: 'POST', body: formData });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || '请求失败，请检查图片或服务状态。');
+        currentComparison = data;
         renderBranch(document.querySelector('#traditional'), data.traditional, true);
         renderBranch(document.querySelector('#vision'), data.vision, false);
         renderStatePill(document.querySelector('#traditional-state'), data.traditional);
         renderStatePill(document.querySelector('#vision-state'), data.vision);
         renderDifferences(data);
         renderSummary(data);
+        prepareReview(data);
         result.classList.remove('hidden');
         statusLine.textContent = '分析完成。单张图片的结果不能代表整体准确率。';
       } catch (error) {
@@ -963,6 +1298,16 @@
         button.disabled = false;
         button.textContent = originalLabel;
       }
+    });
+
+    document.querySelector('#add-category-form').addEventListener('submit', addTruthCategory);
+    document.querySelector('#evaluate-button').addEventListener('click', evaluateCounts);
+    document.querySelector('#download-json').addEventListener('click', downloadJson);
+    document.querySelector('#download-csv').addEventListener('click', downloadCsv);
+    document.querySelector('#truth-table').addEventListener('input', () => {
+      currentEvaluation = null;
+      document.querySelector('#evaluation').replaceChildren();
+      document.querySelector('#evaluation').classList.add('hidden');
     });
   </script>
 </body>
