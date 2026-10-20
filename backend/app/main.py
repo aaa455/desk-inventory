@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 
 from app.api.health import router as health_router
 from app.api.detection import router as detection_router
@@ -18,3 +21,8 @@ app.include_router(segmentation_router, prefix="/api")
 app.include_router(vision_router, prefix="/api")
 
 app.include_router(comparison_router, prefix="/api")
+
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    return FileResponse(Path(__file__).parent / "templates" / "index.html")

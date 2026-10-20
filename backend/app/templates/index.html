@@ -1,0 +1,969 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>桌面物品清点</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+              "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+      --mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas,
+              "Liberation Mono", monospace;
+
+      --paper: #f1f2f1;
+      --panel: #ffffff;
+      --panel-sunk: #f7f8f7;
+
+      --ink: #16191a;
+      --ink-2: #565d5e;
+      --ink-3: #868d8e;
+
+      --rule: #dcdfde;
+      --rule-strong: #c3c8c7;
+
+      --accent: #0f6b58;
+      --accent-ink: #0a4c3f;
+      --accent-wash: #eaf3f0;
+      --accent-rule: #cfe4d8;
+
+      --warn-ink: #8a5a12;
+      --warn-wash: #fdf7ea;
+      --warn-rule: #efe0bf;
+
+      --bad-ink: #96291d;
+      --bad-wash: #fdf3f1;
+      --bad-rule: #f0cfc9;
+
+      --ok-wash: #eef6f1;
+      --ok-rule: #cfe4d8;
+
+      --shadow: 0 1px 2px rgba(20, 26, 25, .05);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ---------- 顶栏 ---------- */
+
+    .masthead {
+      border-bottom: 1px solid var(--rule);
+      background: var(--panel);
+    }
+
+    .shell {
+      width: min(1160px, 100% - 40px);
+      margin: 0 auto;
+    }
+
+    .masthead .shell {
+      display: flex;
+      align-items: baseline;
+      gap: 14px;
+      height: 54px;
+      flex-wrap: wrap;
+      align-content: center;
+    }
+
+    .wordmark {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .01em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wordmark::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      background: var(--accent);
+      flex: none;
+    }
+
+    .masthead-note {
+      font-size: 12.5px;
+      color: var(--ink-3);
+      margin-left: auto;
+    }
+
+    /* ---------- 页头 ---------- */
+
+    main {
+      padding: 34px 0 96px;
+    }
+
+    .lede {
+      max-width: 62ch;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      line-height: 1.25;
+      font-weight: 650;
+      letter-spacing: -0.018em;
+    }
+
+    .lede p {
+      margin: 0;
+      color: var(--ink-2);
+      font-size: 14.5px;
+    }
+
+    .privacy {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin: 18px 0 0;
+      padding: 11px 14px;
+      max-width: 76ch;
+      background: var(--warn-wash);
+      border: 1px solid var(--warn-rule);
+      border-left: 3px solid #d9a53f;
+      border-radius: 3px;
+      color: var(--warn-ink);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .privacy svg {
+      flex: none;
+      margin-top: 2px;
+    }
+
+    /* ---------- 上传控制条 ---------- */
+
+    .controls {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      margin: 26px 0 0;
+      padding: 14px 0;
+      background: var(--paper);
+    }
+
+    .upload {
+      display: flex;
+      align-items: flex-end;
+      gap: 14px;
+      flex-wrap: wrap;
+      padding: 16px;
+      background: var(--panel);
+      border: 1px solid var(--rule-strong);
+      border-radius: 4px;
+      box-shadow: var(--shadow);
+    }
+
+    .field {
+      flex: 1 1 340px;
+      min-width: 0;
+    }
+
+    .field-label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-3);
+      letter-spacing: .02em;
+    }
+
+    input[type=file] {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      padding: 9px 11px;
+      font: inherit;
+      font-size: 13.5px;
+      color: var(--ink);
+      background: var(--panel-sunk);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+
+    input[type=file]:hover { border-color: var(--rule-strong); }
+
+    input[type=file]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    button {
+      flex: none;
+      height: 40px;
+      padding: 0 22px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .01em;
+      color: #fff;
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--accent-ink);
+      border-color: var(--accent-ink);
+    }
+
+    button:disabled {
+      background: var(--rule-strong);
+      border-color: var(--rule-strong);
+      color: #fff;
+      cursor: progress;
+    }
+
+    button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 11px;
+      min-height: 21px;
+    }
+
+    .status {
+      margin: 0;
+      font-size: 13px;
+      color: var(--ink-3);
+    }
+
+    .status.error { color: var(--bad-ink); }
+
+    .file-hint {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink-3);
+      overflow-wrap: anywhere;
+    }
+
+    /* ---------- 结果 ---------- */
+
+    .result { margin-top: 34px; }
+
+    .overview {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 18px 28px;
+      align-items: center;
+      padding: 16px 18px;
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-left: 3px solid var(--accent);
+      border-radius: 3px;
+      margin-bottom: 26px;
+    }
+
+    .overview.is-partial { border-left-color: #d9a53f; }
+
+    .verdict {
+      margin: 0 0 5px;
+      font-size: 14.5px;
+      font-weight: 600;
+      letter-spacing: -0.005em;
+    }
+
+    .digest {
+      margin: 0;
+      font-size: 12.5px;
+      color: var(--ink-3);
+      overflow-wrap: anywhere;
+    }
+
+    .digest code {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink-2);
+    }
+
+    .elapsed {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .elapsed-label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .elapsed-value {
+      font-size: 21px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+    }
+
+    .elapsed-value small {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-3);
+      margin-left: 2px;
+    }
+
+    /* 区块通用 */
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel + .panel,
+    .panel + .split,
+    .overview + .panel { margin-top: 26px; }
+
+    /* 双栏内部的卡片间距交给 grid gap，避免叠加 */
+    .split > .panel + .panel { margin-top: 0; }
+
+    .panel-head {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--rule);
+      background: var(--panel-sunk);
+    }
+
+    .panel-head h2 {
+      margin: 0;
+      font-size: 13.5px;
+      font-weight: 650;
+      letter-spacing: .005em;
+    }
+
+    .panel-head .hint {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--ink-3);
+      text-align: right;
+    }
+
+    .pill {
+      flex: none;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+
+    .pill.ok {
+      color: var(--accent-ink);
+      background: var(--ok-wash);
+      border-color: var(--ok-rule);
+    }
+
+    .pill.bad {
+      color: var(--bad-ink);
+      background: var(--bad-wash);
+      border-color: var(--bad-rule);
+    }
+
+    .scroller { overflow-x: auto; }
+
+    /* 表格 */
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    thead th {
+      padding: 9px 16px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      text-align: left;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    tbody td {
+      padding: 10px 16px;
+      border-bottom: 1px solid #eef0ef;
+      vertical-align: baseline;
+    }
+
+    tbody tr:last-child td { border-bottom: none; }
+
+    .num {
+      text-align: right;
+      width: 88px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    thead th.num { text-align: right; }
+
+    .cat { min-width: 0; }
+
+    .cat-en {
+      display: block;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      color: var(--ink-3);
+      margin-top: 1px;
+    }
+
+    /* 对照表 */
+
+    table.diff { table-layout: fixed; }
+
+    table.diff th:nth-child(1) { width: auto; }
+    table.diff th:nth-child(n + 2) { width: 150px; }
+
+    .count {
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+    }
+
+    .delta {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      color: var(--ink-3);
+    }
+
+    .delta.zero { color: var(--ink-3); font-weight: 500; }
+    .delta.up { color: var(--accent-ink); }
+    .delta.down { color: var(--bad-ink); }
+
+    tr.is-diff td { background: #fcfdfc; }
+
+    tr.is-diff .delta { font-weight: 700; }
+
+    tbody tr:hover td { background: var(--panel-sunk); }
+
+    /* 分支内容 */
+
+    .branch-body { padding: 14px 16px 16px; }
+
+    .metrics {
+      display: flex;
+      gap: 28px;
+      flex-wrap: wrap;
+      padding-bottom: 14px;
+      margin-bottom: 4px;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .metric-label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--ink-3);
+      margin-bottom: 3px;
+    }
+
+    .metric-value {
+      font-size: 19px;
+      font-weight: 600;
+      line-height: 1.25;
+      letter-spacing: -0.015em;
+    }
+
+    .metric-value small {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--ink-3);
+      margin-left: 2px;
+    }
+
+    .branch-body > table { margin: 0 -16px; width: calc(100% + 32px); }
+
+    .branch-body > table thead th { padding-left: 16px; padding-right: 16px; }
+
+    .error-box {
+      padding: 13px 15px;
+      background: var(--bad-wash);
+      border: 1px solid var(--bad-rule);
+      border-left: 3px solid var(--bad-ink);
+      border-radius: 3px;
+      color: var(--bad-ink);
+      font-size: 13.5px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+
+    .error-box .error-title {
+      display: block;
+      font-weight: 650;
+      margin-bottom: 3px;
+    }
+
+    .empty {
+      margin: 10px 0 0;
+      padding: 16px 0;
+      color: var(--ink-3);
+      font-size: 13.5px;
+      line-height: 1.55;
+    }
+
+    .notes {
+      margin: 14px 0 0;
+      padding: 12px 14px 12px 30px;
+      background: var(--panel-sunk);
+      border-radius: 3px;
+      color: var(--ink-2);
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+
+    .notes li { margin: 4px 0; }
+
+    /* 不确定说明 */
+
+    .caveats {
+      margin-top: 14px;
+      border-top: 1px solid var(--rule);
+      padding-top: 12px;
+    }
+
+    .caveats h3 {
+      margin: 0 0 8px;
+      font-size: 11.5px;
+      font-weight: 650;
+      color: var(--ink-3);
+      letter-spacing: .02em;
+    }
+
+    .caveat {
+      display: flex;
+      gap: 8px;
+      margin: 0 0 6px;
+      font-size: 13px;
+      color: var(--ink-2);
+      line-height: 1.55;
+    }
+
+    .caveat::before {
+      content: "·";
+      flex: none;
+      color: var(--ink-3);
+      font-weight: 700;
+    }
+
+    /* 可视化结果 */
+
+    .visual {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--rule);
+    }
+
+    .visual-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+
+    .visual h3 {
+      margin: 0;
+      font-size: 11.5px;
+      font-weight: 650;
+      color: var(--ink-3);
+      letter-spacing: .02em;
+    }
+
+    .visual-open {
+      font-size: 12px;
+      color: var(--accent-ink);
+      text-decoration: none;
+      border-bottom: 1px solid var(--accent-rule);
+    }
+
+    .visual-open:hover { border-bottom-color: var(--accent-ink); }
+
+    .visual img {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: var(--panel-sunk);
+      border: 1px solid var(--rule);
+      border-radius: 2px;
+    }
+
+    /* 双栏 */
+
+    .split {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+      align-items: start;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ---------- 响应式 ---------- */
+
+    @media (max-width: 860px) {
+      .split { grid-template-columns: minmax(0, 1fr); }
+      .overview { grid-template-columns: minmax(0, 1fr); }
+      .elapsed { text-align: left; }
+    }
+
+    @media (max-width: 620px) {
+      body { font-size: 14.5px; }
+      .shell { width: calc(100% - 28px); }
+      main { padding: 24px 0 72px; }
+      h1 { font-size: 22px; }
+      .masthead .shell { height: auto; padding: 12px 0; }
+      .masthead-note { margin-left: 0; width: 100%; }
+      .controls { padding: 10px 0; }
+      .upload { padding: 13px; gap: 11px; }
+      .field { flex: 1 1 100%; }
+      button { width: 100%; }
+      .panel-head { flex-wrap: wrap; }
+      .panel-head .hint { margin-left: 0; width: 100%; text-align: left; }
+      thead th, tbody td { padding-left: 12px; padding-right: 12px; }
+      .branch-body > table { margin: 0 -12px; width: calc(100% + 24px); }
+      .num { width: 64px; }
+      .overview { padding: 14px; }
+      table.diff { font-size: 13px; table-layout: auto; }
+      table.diff th:nth-child(1) { width: auto; }
+      table.diff th:nth-child(n + 2) { width: 62px; padding-left: 8px; padding-right: 8px; }
+      table.diff th:nth-child(n + 2) { white-space: normal; }
+      table.diff td.cat { padding-right: 8px; }
+      .cat-en { font-size: 11px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <header class="masthead">
+    <div class="shell">
+      <span class="wordmark">桌面物品清点</span>
+      <span class="masthead-note">同一张图，两个方案</span>
+    </div>
+  </header>
+
+  <main class="shell">
+    <div class="lede">
+      <h1>同图双方案对比</h1>
+      <p>上传一张桌面照片，分别用本地方案与视觉大模型清点物品，再对照两边给出的数量。</p>
+    </div>
+
+    <p class="privacy">
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+        <path d="M8 1.2 15 14H1L8 1.2Zm0 3.6a.85.85 0 0 0-.85.9l.2 3.4a.65.65 0 0 0 1.3 0l.2-3.4A.85.85 0 0 0 8 4.8Zm0 6.1a.9.9 0 1 0 0 1.8.9.9 0 0 0 0-1.8Z"/>
+      </svg>
+      <span>开始分析后，图片会发送至已配置的视觉模型服务。请勿上传不适合发送到该服务的照片。</span>
+    </p>
+
+    <section class="controls" aria-label="上传与分析">
+      <form class="upload" id="upload-form">
+        <div class="field">
+          <label class="field-label" for="image-file">图片文件</label>
+          <input id="image-file" name="file" type="file" accept="image/jpeg,image/png,image/webp" required>
+        </div>
+        <button id="analyze-button" type="submit">开始分析</button>
+      </form>
+      <div class="status-row">
+        <p id="status" class="status" role="status" aria-live="polite">支持 JPEG、PNG 和 WebP 图片。</p>
+        <span id="file-hint" class="file-hint" aria-hidden="true"></span>
+      </div>
+    </section>
+
+    <div id="result" class="result hidden">
+      <div id="summary" class="overview"></div>
+
+      <section id="difference-panel" class="panel hidden" aria-label="类别数量对照">
+        <div class="panel-head">
+          <h2>类别数量对照</h2>
+          <span class="hint">差值 = 视觉大模型 − 本地方案；非零行已标出</span>
+        </div>
+        <div class="scroller">
+          <div id="difference-table"></div>
+        </div>
+      </section>
+
+      <section class="split" aria-label="分析结果">
+        <article class="panel" id="traditional-panel">
+          <div class="panel-head">
+            <h2>本地方案 · YOLO + SAM</h2>
+            <span class="pill" id="traditional-state"></span>
+          </div>
+          <div class="branch-body" id="traditional"></div>
+        </article>
+        <article class="panel" id="vision-panel">
+          <div class="panel-head">
+            <h2>视觉大模型</h2>
+            <span class="pill" id="vision-state"></span>
+          </div>
+          <div class="branch-body" id="vision"></div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const form = document.querySelector('#upload-form');
+    const fileInput = document.querySelector('#image-file');
+    const button = document.querySelector('#analyze-button');
+    const statusLine = document.querySelector('#status');
+    const fileHint = document.querySelector('#file-hint');
+    const result = document.querySelector('#result');
+
+    const DEFAULT_STATUS = '支持 JPEG、PNG 和 WebP 图片。';
+
+    function element(tag, text, className) {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    }
+
+    function columnHead(text, className) {
+      const th = element('th', text, className);
+      th.scope = 'col';
+      return th;
+    }
+
+    function renderStatePill(target, branch) {
+      target.className = 'pill ' + (branch.status === 'success' ? 'ok' : 'bad');
+      target.textContent = branch.status === 'success' ? '已完成' : '未完成';
+    }
+
+    function shortSha(sha) {
+      if (typeof sha !== 'string' || !sha) return '—';
+      return sha.length > 16 ? sha.slice(0, 8) + '…' + sha.slice(-6) : sha;
+    }
+
+    function renderBranch(target, branch, local) {
+      target.replaceChildren();
+      if (branch.status !== 'success') {
+        const box = element('div', undefined, 'error-box');
+        box.append(element('span', '该方案未返回结果', 'error-title'));
+        box.append(document.createTextNode(branch.error.message));
+        target.append(box);
+        return;
+      }
+      const data = branch.result;
+
+      const metrics = element('div', undefined, 'metrics');
+
+      const total = element('div');
+      total.append(element('span', '清点总数', 'metric-label'));
+      const totalValue = element('div', undefined, 'metric-value');
+      totalValue.append(document.createTextNode(String(data.total)));
+      totalValue.append(element('small', ' 件'));
+      total.append(totalValue);
+
+      const took = element('div');
+      took.append(element('span', '方案耗时', 'metric-label'));
+      const tookValue = element('div', undefined, 'metric-value');
+      tookValue.append(document.createTextNode((data.elapsed_ms / 1000).toFixed(2)));
+      tookValue.append(element('small', ' 秒'));
+      took.append(tookValue);
+
+      metrics.append(total, took);
+      target.append(metrics);
+
+      const items = data.inventory;
+      if (items.length) {
+        const table = element('table');
+        const head = element('thead');
+        const row = element('tr');
+        const catHead = columnHead('类别');
+        const numHead = columnHead('数量', 'num');
+        row.append(catHead, numHead);
+        head.append(row);
+        const body = element('tbody');
+        for (const item of items) {
+          const itemRow = element('tr');
+          const cell = element('td', undefined, 'cat');
+          cell.append(document.createTextNode(item.label));
+          cell.append(element('span', item.label_en, 'cat-en'));
+          const countCell = element('td', String(item.count), 'num count');
+          itemRow.append(cell, countCell);
+          body.append(itemRow);
+        }
+        table.append(head, body);
+        target.append(table);
+      } else {
+        target.append(element('p', '没有检出的物品类别。空清单不等于分析失败。', 'empty'));
+      }
+
+      if (local) {
+        const visual = element('div', undefined, 'visual');
+        const visualHead = element('div', undefined, 'visual-head');
+        visualHead.append(element('h3', '检测与分割结果图'));
+        if (typeof data.annotated_image === 'string' && data.annotated_image.slice(0, 5) === 'data:') {
+          const open = element('a', '新窗口查看', 'visual-open');
+          open.href = data.annotated_image;
+          open.target = '_blank';
+          open.rel = 'noopener';
+          visualHead.append(open);
+        }
+        visual.append(visualHead);
+        const image = element('img');
+        image.src = data.annotated_image;
+        image.alt = '本地方案生成的物体边界与分割叠加图';
+        image.loading = 'lazy';
+        visual.append(image);
+        target.append(visual);
+      } else {
+        const uncertaintyNotes = [
+          ...data.inventory
+            .filter(item => item.uncertainty)
+            .map(item => item.label + '：' + item.uncertainty),
+          ...(data.uncertainties || []),
+        ];
+        if (uncertaintyNotes.length) {
+          const caveats = element('div', undefined, 'caveats');
+          caveats.append(element('h3', '不确定说明'));
+          for (const note of uncertaintyNotes) {
+            caveats.append(element('p', note, 'caveat'));
+          }
+          target.append(caveats);
+        }
+      }
+
+      if (data.notes && data.notes.length) {
+        const list = element('ul', undefined, 'notes');
+        for (const note of data.notes) list.append(element('li', note));
+        target.append(list);
+      }
+    }
+
+    function renderDifferences(data) {
+      const panel = document.querySelector('#difference-panel');
+      const target = document.querySelector('#difference-table');
+      target.replaceChildren();
+      panel.classList.toggle('hidden', !data.comparable);
+      if (!data.comparable) return;
+      const table = element('table', undefined, 'diff');
+      const head = element('thead');
+      const headRow = element('tr');
+      const titles = ['类别', '本地方案', '视觉大模型', '差值'];
+      titles.forEach((title, index) => {
+        headRow.append(columnHead(title, index === 0 ? undefined : 'num'));
+      });
+      head.append(headRow);
+      const body = element('tbody');
+      for (const item of data.differences) {
+        const row = element('tr');
+        if (item.delta !== 0) row.className = 'is-diff';
+        const name = item.traditional_label || item.vision_label || item.label_en;
+        const cell = element('td', undefined, 'cat');
+        cell.append(document.createTextNode(name));
+        cell.append(element('span', item.label_en, 'cat-en'));
+        row.append(cell);
+        row.append(element('td', String(item.traditional_count), 'num count'));
+        row.append(element('td', String(item.vision_count), 'num count'));
+        const delta = item.delta > 0 ? '+' + item.delta : String(item.delta);
+        const deltaClass = 'num delta ' + (item.delta > 0 ? 'up' : item.delta < 0 ? 'down' : 'zero');
+        row.append(element('td', delta, deltaClass));
+        body.append(row);
+      }
+      table.append(head, body);
+      target.append(table);
+      if (!data.differences.length) {
+        target.append(element('p', '两边返回的类别数量一致。仍建议查看原图确认是否有共同漏检。', 'empty'));
+      }
+    }
+
+    function renderSummary(data) {
+      const summary = document.querySelector('#summary');
+      summary.replaceChildren();
+      const complete = data.comparable;
+      summary.classList.toggle('is-partial', !complete);
+
+      const text = element('div');
+      text.append(element('p', complete ? '两种方案均已完成' : '至少一种方案未完成，请分别查看两侧状态', 'verdict'));
+      const digest = element('p', undefined, 'digest');
+      digest.append(document.createTextNode('图片摘要 '));
+      const code = element('code', shortSha(data.image_sha256));
+      code.title = data.image_sha256;
+      digest.append(code);
+      text.append(digest);
+
+      const elapsed = element('div', undefined, 'elapsed');
+      elapsed.append(element('span', '两方案总耗时', 'elapsed-label'));
+      const value = element('div', undefined, 'elapsed-value');
+      value.append(document.createTextNode((data.elapsed_ms / 1000).toFixed(2)));
+      value.append(element('small', ' 秒'));
+      elapsed.append(value);
+
+      summary.append(text, elapsed);
+    }
+
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files[0];
+      if (!file) { fileHint.textContent = ''; return; }
+      const kb = file.size / 1024;
+      const size = kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(kb)) + ' KB';
+      fileHint.textContent = file.name + '（' + size + '）';
+    });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) return;
+      const originalLabel = button.textContent;
+      button.disabled = true;
+      button.textContent = '分析中…';
+      result.classList.add('hidden');
+      statusLine.className = 'status';
+      statusLine.textContent = '正在分析图片，请稍候。';
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const response = await fetch('/api/compare', { method: 'POST', body: formData });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || '请求失败，请检查图片或服务状态。');
+        renderBranch(document.querySelector('#traditional'), data.traditional, true);
+        renderBranch(document.querySelector('#vision'), data.vision, false);
+        renderStatePill(document.querySelector('#traditional-state'), data.traditional);
+        renderStatePill(document.querySelector('#vision-state'), data.vision);
+        renderDifferences(data);
+        renderSummary(data);
+        result.classList.remove('hidden');
+        statusLine.textContent = '分析完成。单张图片的结果不能代表整体准确率。';
+      } catch (error) {
+        statusLine.className = 'status error';
+        statusLine.textContent = error.message || '无法连接分析服务，请确认后端正在运行。';
+      } finally {
+        button.disabled = false;
+        button.textContent = originalLabel;
+      }
+    });
+  </script>
+</body>
+</html>
