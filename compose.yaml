@@ -1,0 +1,31 @@
+services:
+  desk-inventory:
+    build: .
+    container_name: desk-inventory
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      APP_ENV: production
+      YOLO_DEVICE: cpu
+      YOLO_MODEL_PATH: models/yolo11n.pt
+      SAM_MODEL_PATH: models/sam2.1_t.pt
+      YOLO_CONFIG_DIR: /app/.cache/ultralytics
+      TORCH_HOME: /app/.cache/torch
+      MPLCONFIGDIR: /app/.cache/matplotlib
+    ports:
+      - "${DESK_INVENTORY_BIND:-127.0.0.1}:${DESK_INVENTORY_PORT:-8000}:8000"
+    volumes:
+      - ./models:/app/models:ro
+      - ./outputs:/app/outputs
+      - ./.cache:/app/.cache
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)"
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 60s

@@ -1,0 +1,14 @@
+.git
+.venv
+.env
+.cache
+.tmp
+models
+outputs
+uploads
+Ultralytics
+__pycache__
+*.py[cod]
+*.log
+tests
+docs
