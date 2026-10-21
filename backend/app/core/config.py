@@ -19,13 +19,13 @@ class Settings(BaseSettings):
     max_upload_bytes: int = Field(default=10 * 1024 * 1024, gt=0)
     max_image_pixels: int = Field(default=20_000_000, gt=0)
     max_image_side: int = Field(default=1600, ge=64, le=4096)
-    vision_api_base_url: str = "https://api.openai.com/v1"
+    vision_api_base_url: str = "https://api.deepseek.com"
     vision_api_key: str = Field(default="", repr=False)
-    vision_model: str = ""
+    vision_model: str = "deepseek-flash"
     vision_timeout_seconds: float = Field(default=120, ge=1, le=600)
     vision_max_output_tokens: int = Field(default=4096, ge=256, le=32768)
     vision_response_mode: Literal["json_schema", "json_object", "text"] = "json_object"
-    vision_token_limit_field: Literal["max_completion_tokens", "max_tokens"] = "max_completion_tokens"
+    vision_token_limit_field: Literal["max_completion_tokens", "max_tokens"] = "max_tokens"
 
     @field_validator("inventory_excluded_labels")
     @classmethod

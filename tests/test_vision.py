@@ -112,6 +112,28 @@ class VisionTests(unittest.TestCase):
         self.assertEqual(result["sent_image_sha256"], hashlib.sha256(png).hexdigest())
         self.assertNotIn("test-secret-no-leak", response.text)
 
+    def test_deepseek_image_request_uses_compatible_json_protocol(self):
+        self.install(lambda request: httpx.Response(200, json=envelope([item(count=2)])))
+        with patch.object(settings, "vision_api_base_url", "https://api.deepseek.com"):
+            with patch.object(settings, "vision_model", "deepseek-flash"):
+                with patch.object(settings, "vision_token_limit_field", "max_tokens"):
+                    response = self.upload()
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(len(self.requests), 1)
+        request = self.requests[0]
+        self.assertEqual(str(request.url), "https://api.deepseek.com/chat/completions")
+        body = json.loads(request.content)
+        self.assertEqual(body["model"], "deepseek-flash")
+        self.assertEqual(body["max_tokens"], 4096)
+        self.assertNotIn("max_completion_tokens", body)
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+        image = body["messages"][1]["content"][1]["image_url"]
+        self.assertTrue(image["url"].startswith("data:image/png;base64,"))
+        self.assertEqual(image["detail"], "high")
+        self.assertEqual(response.json()["counts"], {"杯子": 2})
+        self.assertEqual(response.json()["model"], "deepseek-flash")
+        self.assertEqual(response.json()["token_limit_field"], "max_tokens")
+
     def test_include_background_and_empty_image_inventory(self):
         self.install(lambda request: httpx.Response(200, json=envelope([item("桌子", "dining table")])))
         result = self.upload(query="?include_background=true").json()
